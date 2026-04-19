@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { browser } from './lib/browser.js';
 import { registerGetStatusTool } from './tools/get-status.js';
+import { registerExtractCardTool } from './tools/extract-card.js';
 
 const server = new McpServer({
   name: 'beliin',
@@ -9,6 +10,7 @@ const server = new McpServer({
 });
 
 registerGetStatusTool(server);
+registerExtractCardTool(server);
 
 await browser.init();
 
