@@ -7,8 +7,16 @@ const BROWSER_DATA = process.env.BELIIN_BROWSER_DATA
 
 class BrowserManager {
   private context: BrowserContext | null = null;
+  private launching: Promise<void> | null = null;
 
   async init(): Promise<void> {
+    if (this.context) return;
+    if (this.launching) return this.launching;
+    this.launching = this.doInit();
+    return this.launching;
+  }
+
+  private async doInit(): Promise<void> {
     this.context = await chromium.launchPersistentContext(BROWSER_DATA, {
       headless: false,
       channel: 'chrome',
@@ -24,8 +32,8 @@ class BrowserManager {
   }
 
   async newPage() {
-    if (!this.context) throw new Error('Browser not initialized');
-    return this.context.newPage();
+    await this.init();
+    return this.context!.newPage();
   }
 
   async cleanup(): Promise<void> {
