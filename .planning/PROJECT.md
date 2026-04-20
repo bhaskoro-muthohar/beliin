@@ -12,20 +12,20 @@ Given a product URL and virtual card details, complete the checkout autonomously
 
 ### Validated
 
-(None yet — ship to validate)
+- [x] MCP server runs over stdio transport, compatible with Claude Desktop (Phase 1)
+- [x] extract_card_details tool scrapes PAN, expiry, CVV, name from one-time Xfers iframe URL (Phase 1)
+- [x] submit_input tool resumes paused sessions for OTP, CVV, captcha input (Phase 1)
+- [x] get_session_status tool returns current checkout state (Phase 1)
+- [x] Session state persists across tool calls via in-memory Map (Phase 1)
+- [x] Persistent Playwright browser context at ~/.beliin/browser-data/ preserves login sessions (Phase 1)
+- [x] Human-in-the-loop via session-based resume pattern (no readline/CLI prompts) (Phase 1)
+- [x] buy_on_shopee tool drives full checkout: PDP → cart → payment → card entry → 3DS → success (Phase 2)
+- [x] buy_on_tokopedia tool drives full checkout with double-iframe card entry handling (Phase 3)
+- [x] Handles both 3DS-triggered and 3DS-skipped checkout paths (Phase 2 + Phase 3)
 
 ### Active
 
-- [ ] MCP server runs over stdio transport, compatible with Claude Desktop
-- [ ] extract_card_details tool scrapes PAN, expiry, CVV, name from one-time Xfers iframe URL
-- [ ] buy_on_shopee tool drives full checkout: PDP → cart → payment → card entry → 3DS → success
-- [ ] buy_on_tokopedia tool drives full checkout with double-iframe card entry handling
-- [ ] submit_input tool resumes paused sessions for OTP, CVV, captcha input
-- [ ] get_session_status tool returns current checkout state
-- [ ] Session state persists across tool calls via in-memory Map
-- [ ] Persistent Playwright browser context at ~/.beliin/browser-data/ preserves login sessions
-- [ ] Human-in-the-loop via session-based resume pattern (no readline/CLI prompts)
-- [ ] Handles both 3DS-triggered and 3DS-skipped checkout paths
+(All requirements validated — v1 milestone complete)
 
 ### Out of Scope
 
@@ -85,4 +85,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-19 after initialization*
+*Last updated: 2026-04-20 after Phase 03 completion — all v1 requirements validated*
