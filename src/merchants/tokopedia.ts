@@ -54,10 +54,18 @@ export async function runTokopediaCheckout(
       }
     }
 
-    // Step 3: Click Buy Now
+    // Step 3: Click Buy Now (prefer direct buy; fall back to cart flow)
     sessions.update(sessionId, { state: 'adding_to_cart' });
-    await page.locator('button:has-text("Beli Langsung"), button:has-text("+ Keranjang")').first().click();
-    await page.waitForURL('**/checkout**', { timeout: 15000 });
+    const buyNow = page.locator('button:has-text("Beli Langsung")');
+    if (await buyNow.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await buyNow.click();
+      await page.waitForURL('**/checkout**', { timeout: 15000 });
+    } else {
+      await page.locator('button:has-text("+ Keranjang")').first().click();
+      await page.goto('https://www.tokopedia.com/cart', { waitUntil: 'domcontentloaded' });
+      await page.locator('button:has-text("Beli")').first().click();
+      await page.waitForURL('**/checkout**', { timeout: 15000 });
+    }
 
     // Step 4: Checkout page — address/shipping pre-filled
     sessions.update(sessionId, { state: 'checkout' });
