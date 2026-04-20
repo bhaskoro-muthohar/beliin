@@ -2,14 +2,15 @@ import { chromium, BrowserContext } from 'playwright';
 import { homedir } from 'os';
 import { join } from 'path';
 
-const USER_DATA_DIR = join(homedir(), '.beliin', 'browser-data');
+const BROWSER_DATA = join(homedir(), '.beliin', 'browser-data');
 
 class BrowserManager {
   private context: BrowserContext | null = null;
 
   async init(): Promise<void> {
-    this.context = await chromium.launchPersistentContext(USER_DATA_DIR, {
+    this.context = await chromium.launchPersistentContext(BROWSER_DATA, {
       headless: false,
+      channel: 'chrome',
       viewport: { width: 1280, height: 720 },
       locale: 'id-ID',
     });
