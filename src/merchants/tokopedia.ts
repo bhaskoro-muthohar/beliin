@@ -107,6 +107,13 @@ export async function runTokopediaCheckout(
 
     // Step 9: 3DS handling (TOKO-05/06)
     sessions.update(sessionId, { state: 'awaiting_payment' });
+
+    // Wait for navigation after clicking pay — either 3DS redirect or success page
+    await page.waitForURL(
+      (url) => url.href.includes('3dsecure') || url.href.includes('acs') || url.href.includes('tokopedia.com/payment') || url.href.includes('pembayaran'),
+      { timeout: 30000 },
+    );
+
     const is3DS = page.url().includes('3dsecure') || page.url().includes('acs');
     if (is3DS) {
       const otp = await waitForInput(sessionId, 'otp', 'Enter the 3DS OTP sent to your phone');
