@@ -2,7 +2,8 @@ import { chromium, BrowserContext } from 'playwright';
 import { homedir } from 'os';
 import { join } from 'path';
 
-const BROWSER_DATA = join(homedir(), '.beliin', 'browser-data');
+const BROWSER_DATA = process.env.BELIIN_BROWSER_DATA
+  || join(homedir(), 'Library', 'Application Support', 'Google', 'Chrome');
 
 class BrowserManager {
   private context: BrowserContext | null = null;
