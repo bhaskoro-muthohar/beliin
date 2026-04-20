@@ -20,7 +20,12 @@ registerBuyOnShopeeTool(server);
 registerSearchOnShopeeTool(server);
 registerBuyOnTokopediaTool(server);
 
-await browser.init();
+try {
+  await browser.init();
+} catch (err) {
+  console.error('[beliin] Failed to initialize browser:', (err as Error).message);
+  process.exit(1);
+}
 
 const cleanup = async () => {
   await browser.cleanup();
