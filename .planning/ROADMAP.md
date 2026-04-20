@@ -13,7 +13,7 @@ beliin delivers an MCP server that automates e-commerce checkout on Shopee and T
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Foundation + Card Extraction** - MCP server skeleton, browser manager, session infrastructure, and Xfers card scraping (completed 2026-04-19)
-- [ ] **Phase 2: Shopee Checkout** - Full purchase flow on Shopee with page-redirect card entry and 3DS handling
+- [x] **Phase 2: Shopee Checkout** - Full purchase flow on Shopee with page-redirect card entry and 3DS handling (completed 2026-04-19)
 - [ ] **Phase 3: Tokopedia Checkout** - Full purchase flow on Tokopedia with double-nested iframe card entry and 3DS handling
 
 ## Phase Details
@@ -45,9 +45,9 @@ Plans:
   5. Tool returns clear success/failure status after checkout flow ends
 **Plans:** 3 plans
 Plans:
-- [ ] 02-01-PLAN.md — Generic submit_input tool for session pause/resume (HITL infrastructure)
-- [ ] 02-02-PLAN.md — Shopee checkout adapter + buy_on_shopee tool (full purchase flow)
-- [ ] 02-03-PLAN.md — search_on_shopee tool (product discovery by keyword)
+- [x] 02-01-PLAN.md — Generic submit_input tool for session pause/resume (HITL infrastructure) (completed 2026-04-19)
+- [x] 02-02-PLAN.md — Shopee checkout adapter + buy_on_shopee tool (full purchase flow) (completed 2026-04-19)
+- [x] 02-03-PLAN.md — search_on_shopee tool (product discovery by keyword) (completed 2026-04-19)
 
 ### Phase 3: Tokopedia Checkout
 **Goal**: Users can complete a full Tokopedia purchase using a virtual card, handling double-nested cross-origin iframe card entry
@@ -59,7 +59,9 @@ Plans:
   3. When 3DS triggers, session pauses and submit_input resumes it (reusing Phase 2 infrastructure)
   4. Checkout completes successfully on both 3DS-triggered and 3DS-skipped paths
 
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 03-01-PLAN.md — Tokopedia checkout adapter + buy_on_tokopedia tool (full purchase flow with double-nested iframe card entry)
 
 ## Progress
 
@@ -69,5 +71,5 @@ Phases execute in numeric order: 1 -> 2 -> 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation + Card Extraction | 2/2 | Complete | 2026-04-19 |
-| 2. Shopee Checkout | 0/3 | Not started | - |
-| 3. Tokopedia Checkout | 0/TBD | Not started | - |
+| 2. Shopee Checkout | 3/3 | Complete | 2026-04-19 |
+| 3. Tokopedia Checkout | 0/1 | Planned | - |
