@@ -69,7 +69,9 @@ export async function runTokopediaCheckout(
 
     // Step 4: Checkout page — address/shipping pre-filled
     sessions.update(sessionId, { state: 'checkout' });
-    await page.waitForLoadState('networkidle');
+    // Use bounded wait instead of networkidle (SPA keeps connections alive)
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(2000);
 
     // Step 5: Select payment method via payment-gateway-list iframe
     sessions.update(sessionId, { state: 'selecting_payment' });
