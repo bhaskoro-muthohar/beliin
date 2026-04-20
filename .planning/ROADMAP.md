@@ -61,7 +61,7 @@ Plans:
 
 **Plans:** 1 plan
 Plans:
-- [ ] 03-01-PLAN.md — Tokopedia checkout adapter + buy_on_tokopedia tool (full purchase flow with double-nested iframe card entry)
+- [x] 03-01-PLAN.md — Tokopedia checkout adapter + buy_on_tokopedia tool (full purchase flow with double-nested iframe card entry)
 
 ## Progress
 
