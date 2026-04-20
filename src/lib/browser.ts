@@ -13,6 +13,11 @@ class BrowserManager {
       channel: 'chrome',
       viewport: { width: 1280, height: 720 },
       locale: 'id-ID',
+      ignoreDefaultArgs: ['--enable-automation'],
+      args: [
+        '--disable-blink-features=AutomationControlled',
+        '--disable-infobars',
+      ],
     });
     console.error('[beliin] Browser context launched');
   }
