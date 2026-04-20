@@ -6,6 +6,7 @@ import { registerExtractCardTool } from './tools/extract-card.js';
 import { registerSubmitInputTool } from './tools/submit-input.js';
 import { registerBuyOnShopeeTool } from './tools/buy-on-shopee.js';
 import { registerSearchOnShopeeTool } from './tools/search-on-shopee.js';
+import { registerBuyOnTokopediaTool } from './tools/buy-on-tokopedia.js';
 
 const server = new McpServer({
   name: 'beliin',
@@ -17,6 +18,7 @@ registerExtractCardTool(server);
 registerSubmitInputTool(server);
 registerBuyOnShopeeTool(server);
 registerSearchOnShopeeTool(server);
+registerBuyOnTokopediaTool(server);
 
 await browser.init();
 
