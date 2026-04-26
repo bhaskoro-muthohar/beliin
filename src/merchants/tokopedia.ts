@@ -17,6 +17,55 @@ function waitForInput(sessionId: string, inputType: string, prompt: string): Pro
   });
 }
 
+async function scrapeVariantOptions(page: Page): Promise<string[]> {
+  const selectors = [
+    'button[data-testid="pdpVariantOption"]',
+    '.css-1k4y9ld button',
+    '[data-testid="lblPDPVariantName"]',
+    '[data-testid="pdpVariantTitle"] ~ div button',
+    '.variant-option button',
+    '[class*="variant"] button',
+  ];
+  const combined = page.locator(selectors.join(', '));
+  const count = await combined.count();
+  const names: string[] = [];
+  for (let i = 0; i < count; i++) {
+    const text = await combined.nth(i).textContent();
+    if (text?.trim()) names.push(text.trim());
+  }
+  return names;
+}
+
+async function selectVariantIfNeeded(
+  page: Page,
+  sessionId: string,
+  preferredVariant?: string,
+  forceAsk = false,
+): Promise<void> {
+  const options = await scrapeVariantOptions(page);
+  if (options.length === 0) return;
+
+  const selectors = [
+    'button[data-testid="pdpVariantOption"]',
+    '.css-1k4y9ld button',
+    '[data-testid="lblPDPVariantName"]',
+    '[data-testid="pdpVariantTitle"] ~ div button',
+    '.variant-option button',
+    '[class*="variant"] button',
+  ];
+  const buttons = page.locator(selectors.join(', '));
+
+  if (preferredVariant && !forceAsk) {
+    await buttons.filter({ hasText: preferredVariant }).first().click();
+    console.error(`[beliin] Session ${sessionId}: selected variant "${preferredVariant}"`);
+    return;
+  }
+
+  const chosen = await waitForInput(sessionId, 'variant_selection', `Select a variant: ${options.join(', ')}`);
+  await buttons.filter({ hasText: chosen }).first().click();
+  console.error(`[beliin] Session ${sessionId}: selected variant "${chosen}"`);
+}
+
 export async function runTokopediaCheckout(
   page: Page,
   sessionId: string,
@@ -37,35 +86,36 @@ export async function runTokopediaCheckout(
 
     // Step 2: Handle variants
     sessions.update(sessionId, { state: 'selecting_variant' });
-    const variantButtons = page.locator('button[data-testid="pdpVariantOption"], .css-1k4y9ld button, [data-testid="lblPDPVariantName"]');
-    const variantCount = await variantButtons.count();
-
-    if (variantCount > 0) {
-      if (options.variant) {
-        await variantButtons.filter({ hasText: options.variant }).first().click();
-      } else {
-        const names: string[] = [];
-        for (let i = 0; i < variantCount; i++) {
-          const text = await variantButtons.nth(i).textContent();
-          if (text?.trim()) names.push(text.trim());
-        }
-        const chosen = await waitForInput(sessionId, 'variant_selection', `Select a variant: ${names.join(', ')}`);
-        await variantButtons.filter({ hasText: chosen }).first().click();
-      }
-    }
+    console.error(`[beliin] Session ${sessionId}: on PDP — ${page.url()}`);
+    await selectVariantIfNeeded(page, sessionId, options.variant);
 
     // Step 3: Click Buy Now (prefer direct buy; fall back to cart flow)
     sessions.update(sessionId, { state: 'adding_to_cart' });
     const buyNow = page.locator('button:has-text("Beli Langsung")');
     if (await buyNow.isVisible({ timeout: 3000 }).catch(() => false)) {
       await buyNow.click();
-      await page.waitForURL('**/checkout**', { timeout: 15000 });
+      console.error(`[beliin] Session ${sessionId}: clicked Beli Langsung`);
+
+      const navigated = await Promise.race([
+        page.waitForURL('**/checkout**', { timeout: 15000 }).then(() => true),
+        page.waitForTimeout(3000).then(() => false),
+      ]);
+
+      if (!navigated && !page.url().includes('/checkout')) {
+        console.error(`[beliin] Session ${sessionId}: still on PDP after buy click — likely missing variant`);
+        await selectVariantIfNeeded(page, sessionId, undefined, true);
+        await buyNow.click();
+        console.error(`[beliin] Session ${sessionId}: retrying Beli Langsung after variant selection`);
+        await page.waitForURL('**/checkout**', { timeout: 15000 });
+      }
     } else {
+      console.error(`[beliin] Session ${sessionId}: Beli Langsung not visible, using cart flow`);
       await page.locator('button:has-text("+ Keranjang")').first().click();
       await page.goto('https://www.tokopedia.com/cart', { waitUntil: 'domcontentloaded' });
       await page.locator('button:has-text("Beli")').first().click();
       await page.waitForURL('**/checkout**', { timeout: 15000 });
     }
+    console.error(`[beliin] Session ${sessionId}: on checkout — ${page.url()}`);
 
     // Step 4: Checkout page — address/shipping pre-filled
     sessions.update(sessionId, { state: 'checkout' });
