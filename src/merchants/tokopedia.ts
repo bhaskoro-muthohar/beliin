@@ -128,7 +128,11 @@ export async function runTokopediaCheckout(
     await page.locator('text=Lihat Semua').first().click();
 
     const paymentFrame = page.frameLocator("iframe[title='payment-gateway-list']");
-    await paymentFrame.locator('text=Kartu Kredit').first().click();
+    await paymentFrame.locator('body').first().waitFor({ timeout: 10000 });
+    await paymentFrame.locator(':text-matches("Kartu Kredit", "i")').first().click();
+    console.error(`[beliin] Session ${sessionId}: selected Kartu Kredit payment method`);
+
+    await page.waitForTimeout(2000);
 
     // Minimum transaction check (D-04)
     const cardUnavailable = await paymentFrame.locator('text=Tambah kartu tidak tersedia').isVisible({ timeout: 3000 }).catch(() => false);
@@ -140,7 +144,11 @@ export async function runTokopediaCheckout(
       return;
     }
 
-    await paymentFrame.locator('button:has-text("Pakai Kartu Lain")').click();
+    // Wait for loading overlay to clear before clicking
+    await paymentFrame.locator('div.css-16vaz7h, [class*="overlay"], [class*="loading"], [class*="spinner"]')
+      .first().waitFor({ state: 'hidden', timeout: 10000 }).catch(() => {});
+    await paymentFrame.locator('button:has-text("Pakai Kartu Lain")').click({ force: true });
+    console.error(`[beliin] Session ${sessionId}: clicked Pakai Kartu Lain`);
 
     // Resolve card details — use provided or pause for input
     let card = options.card;
