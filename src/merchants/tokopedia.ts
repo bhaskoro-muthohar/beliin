@@ -154,6 +154,15 @@ export async function runTokopediaCheckout(
     let card = options.card;
     if (!card) {
       const raw = await waitForInput(sessionId, 'card_details', 'Checkout ready. Provide card details via submit_input to continue.');
+
+      if (!page.url().includes('/checkout')) {
+        sessions.update(sessionId, {
+          state: 'failed',
+          data: { error: 'Checkout page expired while waiting for card details. Retry with card details provided upfront to avoid the wait.' },
+        });
+        return;
+      }
+
       const parsed = JSON.parse(raw);
       card = { number: parsed.card_number, expiry: parsed.card_expiry, cvv: parsed.card_cvv };
     }
