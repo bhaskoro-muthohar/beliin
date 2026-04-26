@@ -123,36 +123,10 @@ export async function runTokopediaCheckout(
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(2000);
 
-    // Step 5: Select payment method via payment-gateway-list iframe
-    sessions.update(sessionId, { state: 'selecting_payment' });
-    await page.locator('text=Lihat Semua').first().click();
-
-    const paymentFrame = page.frameLocator("iframe[title='payment-gateway-list']");
-    await paymentFrame.locator('body').first().waitFor({ timeout: 10000 });
-    await paymentFrame.locator(':text-matches("Kartu Kredit", "i")').first().click();
-    console.error(`[beliin] Session ${sessionId}: selected Kartu Kredit payment method`);
-
-    await page.waitForTimeout(2000);
-
-    // Minimum transaction check (D-04)
-    const cardUnavailable = await paymentFrame.locator('text=Tambah kartu tidak tersedia').isVisible({ timeout: 3000 }).catch(() => false);
-    if (cardUnavailable) {
-      sessions.update(sessionId, {
-        state: 'failed',
-        data: { error: 'Card payment unavailable — transaction below minimum (~Rp50,000). Use a higher-value product.' },
-      });
-      return;
-    }
-
-    // Wait for loading overlay to clear before clicking
-    await paymentFrame.locator('div.css-16vaz7h, [class*="overlay"], [class*="loading"], [class*="spinner"]')
-      .first().waitFor({ state: 'hidden', timeout: 10000 }).catch(() => {});
-    await paymentFrame.locator('button:has-text("Pakai Kartu Lain")').click({ force: true });
-    console.error(`[beliin] Session ${sessionId}: clicked Pakai Kartu Lain`);
-
-    // Resolve card details — use provided or pause for input
+    // Resolve card details — pause BEFORE touching payment if not provided
     let card = options.card;
     if (!card) {
+      sessions.update(sessionId, { state: 'need_input' });
       const raw = await waitForInput(sessionId, 'card_details', 'Checkout ready. Provide card details via submit_input to continue.');
 
       if (!page.url().includes('/checkout')) {
@@ -167,9 +141,62 @@ export async function runTokopediaCheckout(
       card = { number: parsed.card_number, expiry: parsed.card_expiry, cvv: parsed.card_cvv };
     }
 
+    // Step 5: Select payment method via payment-gateway-list iframe
+    sessions.update(sessionId, { state: 'selecting_payment' });
+    await page.locator('text=Lihat Semua').first().click();
+
+    const paymentFrame = page.frameLocator("iframe[title='payment-gateway-list']");
+    await paymentFrame.locator('body').first().waitFor({ timeout: 10000 });
+
+    // Only click "Kartu Kredit" if the section isn't already expanded
+    const pakaiKartuLain = paymentFrame.locator('button:has-text("Pakai Kartu Lain")');
+    const alreadyExpanded = await pakaiKartuLain.isVisible({ timeout: 3000 }).catch(() => false);
+    if (!alreadyExpanded) {
+      await paymentFrame.locator(':text-matches("Kartu Kredit", "i")').first().click();
+      console.error(`[beliin] Session ${sessionId}: expanded Kartu Kredit section`);
+      await page.waitForTimeout(2000);
+    } else {
+      console.error(`[beliin] Session ${sessionId}: Kartu Kredit section already expanded`);
+    }
+
+    // Minimum transaction check (D-04)
+    const cardUnavailable = await paymentFrame.locator('text=Tambah kartu tidak tersedia').isVisible({ timeout: 3000 }).catch(() => false);
+    if (cardUnavailable) {
+      sessions.update(sessionId, {
+        state: 'failed',
+        data: { error: 'Card payment unavailable — transaction below minimum (~Rp50,000). Use a higher-value product.' },
+      });
+      return;
+    }
+
+    // Wait for loading overlay to clear before clicking
+    await paymentFrame.locator('div.css-16vaz7h, [class*="overlay"], [class*="loading"], [class*="spinner"]')
+      .first().waitFor({ state: 'hidden', timeout: 10000 }).catch(() => {});
+    await pakaiKartuLain.click({ force: true });
+    console.error(`[beliin] Session ${sessionId}: clicked Pakai Kartu Lain`);
+
+    // Verify card iframe appeared; if not, re-expand and retry
+    const cardFrame = paymentFrame.frameLocator('#iframe-creditcard');
+    let iframeReady = await cardFrame.locator('input[data-n-input]').first()
+      .isVisible({ timeout: 5000 }).catch(() => false);
+    if (!iframeReady) {
+      console.error(`[beliin] Session ${sessionId}: card iframe not found — re-expanding Kartu Kredit`);
+      await paymentFrame.locator(':text-matches("Kartu Kredit", "i")').first().click();
+      await page.waitForTimeout(2000);
+      await pakaiKartuLain.click({ force: true });
+      iframeReady = await cardFrame.locator('input[data-n-input]').first()
+        .isVisible({ timeout: 5000 }).catch(() => false);
+      if (!iframeReady) {
+        sessions.update(sessionId, {
+          state: 'failed',
+          data: { error: 'Card form iframe did not appear after multiple attempts.' },
+        });
+        return;
+      }
+    }
+
     // Step 6: Fill card form in double-nested iframe (D-01)
     sessions.update(sessionId, { state: 'filling_card' });
-    const cardFrame = paymentFrame.frameLocator('#iframe-creditcard');
     await cardFrame.locator('div#cc-card-no input[data-n-input]').fill(card.number);
     await cardFrame.locator('div#cc-exp-date input[data-n-input]').fill(card.expiry);
     await cardFrame.locator("button:has-text('Konfirmasi')").click();
