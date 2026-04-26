@@ -3,7 +3,7 @@ import { sessions } from '../lib/session.js';
 
 export interface ShopeeCheckoutOptions {
   url: string;
-  card: { number: string; expiry: string; cvv: string; name: string };
+  card?: { number: string; expiry: string; cvv: string; name: string };
   variant?: string;
 }
 
@@ -66,14 +66,22 @@ export async function runShopeeCheckout(
     await page.locator('button:has-text("Kartu Baru"), button:has-text("New Card"), button:has-text("Pay With New Card")').first().click();
     await page.waitForURL('**/payment-v2/add-card**', { timeout: 15000 });
 
+    // Resolve card details — use provided or pause for input
+    let card = options.card;
+    if (!card) {
+      const raw = await waitForInput(sessionId, 'card_details', 'Checkout ready. Provide card details via submit_input to continue.');
+      const parsed = JSON.parse(raw);
+      card = { number: parsed.card_number, expiry: parsed.card_expiry, cvv: parsed.card_cvv, name: parsed.card_name || 'CARDHOLDER' };
+    }
+
     // Step 6: Fill card form on pay.shopee.co.id
     sessions.update(sessionId, { state: 'filling_card' });
     await page.waitForLoadState('networkidle');
 
-    await page.fill("input[type='tel'][maxlength='19']", options.card.number);
-    await page.fill("input[type='tel'][maxlength='5']", options.card.expiry);
-    await page.fill("input[type='password'][maxlength='3']", options.card.cvv);
-    await page.locator("input[type='text'].inputWithStatusInput--nCzAd").first().fill(options.card.name);
+    await page.fill("input[type='tel'][maxlength='19']", card.number);
+    await page.fill("input[type='tel'][maxlength='5']", card.expiry);
+    await page.fill("input[type='password'][maxlength='3']", card.cvv);
+    await page.locator("input[type='text'].inputWithStatusInput--nCzAd").first().fill(card.name);
 
     await page.waitForFunction(() => {
       const btn = document.querySelector('button.submitBtn--yiKdL');
@@ -95,7 +103,7 @@ export async function runShopeeCheckout(
     );
 
     if (page.url().includes('/payment/')) {
-      await page.fill("input[type='password']", options.card.cvv);
+      await page.fill("input[type='password']", card.cvv);
       await page.locator('button:has-text("Pay"), button:has-text("Bayar")').first().click();
       await page.waitForURL(
         (url) => url.hostname.includes('3dsecure') || url.hostname.includes('shopee.co.id'),

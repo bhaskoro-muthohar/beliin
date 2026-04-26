@@ -6,7 +6,7 @@ import { toolResult } from '../lib/types.js';
 export function registerSubmitInputTool(server: McpServer): void {
   server.tool(
     'submit_input',
-    'Resume a paused checkout session with user-provided input (OTP, variant, captcha, etc.)',
+    'Resume a paused checkout session (state: need_input) by providing the requested value — OTP code, variant choice, captcha answer, or card details. For card_details input type, pass a JSON string: {"card_number":"...","card_expiry":"MM/YY","card_cvv":"..."}. Shopee also accepts card_name. The session will continue the checkout flow automatically after input is submitted.',
     {
       session_id: z.string().describe('The paused session ID'),
       value: z.string().describe('The input value (OTP code, variant choice, etc.)'),
@@ -36,6 +36,25 @@ export function registerSubmitInputTool(server: McpServer): void {
             status: 'error',
             data: null,
           }, true);
+        }
+
+        if (session.data.input_type === 'card_details') {
+          try {
+            const parsed = JSON.parse(value);
+            if (!parsed.card_number || !parsed.card_expiry || !parsed.card_cvv) {
+              return toolResult({
+                summary: 'card_details requires JSON with card_number, card_expiry, card_cvv',
+                status: 'error',
+                data: null,
+              }, true);
+            }
+          } catch {
+            return toolResult({
+              summary: 'card_details value must be valid JSON: {"card_number":"...","card_expiry":"MM/YY","card_cvv":"..."}',
+              status: 'error',
+              data: null,
+            }, true);
+          }
         }
 
         resolve(value);

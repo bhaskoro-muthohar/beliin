@@ -3,7 +3,7 @@ import { sessions } from '../lib/session.js';
 
 export interface TokopediaCheckoutOptions {
   url: string;
-  card: { number: string; expiry: string; cvv: string };
+  card?: { number: string; expiry: string; cvv: string };
   variant?: string;
 }
 
@@ -92,11 +92,19 @@ export async function runTokopediaCheckout(
 
     await paymentFrame.locator('button:has-text("Pakai Kartu Lain")').click();
 
+    // Resolve card details — use provided or pause for input
+    let card = options.card;
+    if (!card) {
+      const raw = await waitForInput(sessionId, 'card_details', 'Checkout ready. Provide card details via submit_input to continue.');
+      const parsed = JSON.parse(raw);
+      card = { number: parsed.card_number, expiry: parsed.card_expiry, cvv: parsed.card_cvv };
+    }
+
     // Step 6: Fill card form in double-nested iframe (D-01)
     sessions.update(sessionId, { state: 'filling_card' });
     const cardFrame = paymentFrame.frameLocator('#iframe-creditcard');
-    await cardFrame.locator('div#cc-card-no input[data-n-input]').fill(options.card.number);
-    await cardFrame.locator('div#cc-exp-date input[data-n-input]').fill(options.card.expiry);
+    await cardFrame.locator('div#cc-card-no input[data-n-input]').fill(card.number);
+    await cardFrame.locator('div#cc-exp-date input[data-n-input]').fill(card.expiry);
     await cardFrame.locator("button:has-text('Konfirmasi')").click();
 
     // Step 7: Handle installment modal and place order
@@ -112,7 +120,7 @@ export async function runTokopediaCheckout(
     // Step 8: CVV entry on separate page (D-02)
     sessions.update(sessionId, { state: 'cvv_entry' });
     await page.waitForURL('**/payment/validate/**', { timeout: 15000 });
-    await page.locator('input[type="password"], input[type="tel"], input[type="text"]').first().fill(options.card.cvv);
+    await page.locator('input[type="password"], input[type="tel"], input[type="text"]').first().fill(card.cvv);
     await page.locator('button:has-text("Lanjutkan"), button:has-text("Pay")').first().click();
 
     // Step 9: 3DS handling (TOKO-05/06)
