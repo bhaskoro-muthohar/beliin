@@ -17,16 +17,27 @@ class BrowserManager {
   }
 
   private async doInit(): Promise<void> {
-    this.context = await chromium.launchPersistentContext(BROWSER_DATA, {
-      headless: false,
-      viewport: { width: 1280, height: 720 },
-      locale: 'id-ID',
-      args: [
-        '--disable-blink-features=AutomationControlled',
-        '--disable-infobars',
-      ],
-    });
-    console.error('[beliin] Browser context launched');
+    try {
+      this.context = await chromium.launchPersistentContext(BROWSER_DATA, {
+        headless: false,
+        viewport: { width: 1280, height: 720 },
+        locale: 'id-ID',
+        args: [
+          '--disable-blink-features=AutomationControlled',
+          '--disable-infobars',
+        ],
+      });
+      this.context.on('close', () => {
+        console.error('[beliin] Browser context closed unexpectedly');
+        this.context = null;
+        this.launching = null;
+      });
+      console.error('[beliin] Browser context launched');
+    } catch (err) {
+      this.context = null;
+      this.launching = null;
+      throw err;
+    }
   }
 
   async newPage() {
