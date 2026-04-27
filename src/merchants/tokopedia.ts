@@ -1,5 +1,8 @@
 import { Page } from 'playwright';
+import { mkdirSync } from 'fs';
 import { sessions } from '../lib/session.js';
+
+const DEBUG_DIR = '/tmp/beliin-debug';
 
 export interface TokopediaCheckoutOptions {
   url: string;
@@ -123,6 +126,10 @@ export async function runTokopediaCheckout(
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(2000);
 
+    mkdirSync(DEBUG_DIR, { recursive: true });
+    await page.screenshot({ path: `${DEBUG_DIR}/01-checkout.png`, fullPage: true });
+    console.error(`[beliin] DEBUG 01-checkout: url=${page.url()}`);
+
     // Resolve card details — pause BEFORE touching payment if not provided
     let card = options.card;
     if (!card) {
@@ -145,12 +152,19 @@ export async function runTokopediaCheckout(
     sessions.update(sessionId, { state: 'selecting_payment' });
     await page.locator('text=Lihat Semua').first().click();
 
+    const iframeCount = await page.locator("iframe[title='payment-gateway-list']").count();
+    console.error(`[beliin] DEBUG 02: url=${page.url()}, payment iframes found=${iframeCount}`);
+    await page.screenshot({ path: `${DEBUG_DIR}/02-after-lihat-semua.png`, fullPage: true });
+
     const paymentFrame = page.frameLocator("iframe[title='payment-gateway-list']");
     await paymentFrame.locator('body').first().waitFor({ timeout: 10000 });
 
     // Only click "Kartu Kredit" if the section isn't already expanded
     const pakaiKartuLain = paymentFrame.locator('button:has-text("Pakai Kartu Lain")');
+    const kartuKreditVisible = await paymentFrame.locator(':text-matches("Kartu Kredit", "i")').first().isVisible().catch(() => false);
     const alreadyExpanded = await pakaiKartuLain.isVisible({ timeout: 3000 }).catch(() => false);
+    console.error(`[beliin] DEBUG 03: kartuKreditVisible=${kartuKreditVisible}, pakaiKartuLainVisible=${alreadyExpanded}`);
+
     if (!alreadyExpanded) {
       await paymentFrame.locator(':text-matches("Kartu Kredit", "i")').first().click();
       console.error(`[beliin] Session ${sessionId}: expanded Kartu Kredit section`);
@@ -158,10 +172,12 @@ export async function runTokopediaCheckout(
     } else {
       console.error(`[beliin] Session ${sessionId}: Kartu Kredit section already expanded`);
     }
+    await page.screenshot({ path: `${DEBUG_DIR}/03-after-kartu-kredit.png`, fullPage: true });
 
     // Minimum transaction check (D-04)
     const cardUnavailable = await paymentFrame.locator('text=Tambah kartu tidak tersedia').isVisible({ timeout: 3000 }).catch(() => false);
     if (cardUnavailable) {
+      await page.screenshot({ path: `${DEBUG_DIR}/05-failure.png`, fullPage: true });
       sessions.update(sessionId, {
         state: 'failed',
         data: { error: 'Card payment unavailable — transaction below minimum (~Rp50,000). Use a higher-value product.' },
@@ -179,6 +195,11 @@ export async function runTokopediaCheckout(
     const cardFrame = paymentFrame.frameLocator('#iframe-creditcard');
     let iframeReady = await cardFrame.locator('input[data-n-input]').first()
       .isVisible({ timeout: 5000 }).catch(() => false);
+
+    const creditcardIframeExists = await paymentFrame.locator('#iframe-creditcard').count();
+    console.error(`[beliin] DEBUG 04: iframeReady=${iframeReady}, #iframe-creditcard count=${creditcardIframeExists}`);
+    await page.screenshot({ path: `${DEBUG_DIR}/04-after-pakai-kartu-lain.png`, fullPage: true });
+
     if (!iframeReady) {
       console.error(`[beliin] Session ${sessionId}: card iframe not found — re-expanding Kartu Kredit`);
       await paymentFrame.locator(':text-matches("Kartu Kredit", "i")').first().click();
@@ -187,6 +208,7 @@ export async function runTokopediaCheckout(
       iframeReady = await cardFrame.locator('input[data-n-input]').first()
         .isVisible({ timeout: 5000 }).catch(() => false);
       if (!iframeReady) {
+        await page.screenshot({ path: `${DEBUG_DIR}/05-failure.png`, fullPage: true });
         sessions.update(sessionId, {
           state: 'failed',
           data: { error: 'Card form iframe did not appear after multiple attempts.' },
