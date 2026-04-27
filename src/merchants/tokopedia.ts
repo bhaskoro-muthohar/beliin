@@ -193,8 +193,10 @@ export async function runTokopediaCheckout(
 
     // Verify card iframe appeared; if not, re-expand and retry
     const cardFrame = paymentFrame.frameLocator('#iframe-creditcard');
-    let iframeReady = await cardFrame.locator('input[data-n-input]').first()
-      .isVisible({ timeout: 5000 }).catch(() => false);
+
+    // Wait for card form iframe to fully load
+    let iframeReady = await cardFrame.locator('div#cc-card-no').first()
+      .waitFor({ state: 'visible', timeout: 15000 }).then(() => true).catch(() => false);
 
     const creditcardIframeExists = await paymentFrame.locator('#iframe-creditcard').count();
     console.error(`[beliin] DEBUG 04: iframeReady=${iframeReady}, #iframe-creditcard count=${creditcardIframeExists}`);
@@ -205,8 +207,8 @@ export async function runTokopediaCheckout(
       await paymentFrame.locator(':text-matches("Kartu Kredit", "i")').first().click();
       await page.waitForTimeout(2000);
       await pakaiKartuLain.click({ force: true });
-      iframeReady = await cardFrame.locator('input[data-n-input]').first()
-        .isVisible({ timeout: 5000 }).catch(() => false);
+      iframeReady = await cardFrame.locator('div#cc-card-no').first()
+        .waitFor({ state: 'visible', timeout: 15000 }).then(() => true).catch(() => false);
       if (!iframeReady) {
         await page.screenshot({ path: `${DEBUG_DIR}/05-failure.png`, fullPage: true });
         sessions.update(sessionId, {
