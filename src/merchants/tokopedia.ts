@@ -205,6 +205,7 @@ export async function runTokopediaCheckout(
     // Wait for loading overlay to clear before clicking
     await paymentFrame.locator('div.css-16vaz7h, [class*="overlay"], [class*="loading"], [class*="spinner"]')
       .first().waitFor({ state: 'hidden', timeout: 10000 }).catch(() => {});
+    await pakaiKartuLain.scrollIntoViewIfNeeded();
     await pakaiKartuLain.click({ force: true });
     console.error(`[beliin] Session ${sessionId}: clicked Pakai Kartu Lain`);
 
@@ -241,11 +242,13 @@ export async function runTokopediaCheckout(
     sessions.update(sessionId, { state: 'filling_card' });
     const cardNumberInput = cardFrame.locator('div#cc-card-no input[data-n-input]');
     await cardNumberInput.click();
-    await cardNumberInput.pressSequentially(card.number, { delay: 50 });
+    await cardNumberInput.pressSequentially(card.number, { delay: 80 });
+    await cardNumberInput.dispatchEvent('blur');
 
     const cardExpiryInput = cardFrame.locator('div#cc-exp-date input[data-n-input]');
     await cardExpiryInput.click();
-    await cardExpiryInput.pressSequentially(card.expiry, { delay: 50 });
+    await cardExpiryInput.pressSequentially(card.expiry, { delay: 80 });
+    await cardExpiryInput.dispatchEvent('blur');
 
     await page.waitForTimeout(500);
     await cardFrame.locator("button:has-text('Konfirmasi')").click();
