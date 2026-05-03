@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { browser } from '../lib/browser.js';
 import { CardDetails, toolResult } from '../lib/types.js';
 
-async function extractCard(url: string): Promise<CardDetails> {
+export async function extractCard(url: string): Promise<CardDetails> {
   const page = await browser.newPage();
   try {
     await page.goto(url, { waitUntil: 'networkidle' });
@@ -39,7 +39,7 @@ async function extractCard(url: string): Promise<CardDetails> {
 export function registerExtractCardTool(server: McpServer): void {
   server.tool(
     'extract_card_details',
-    'Extract virtual card details (PAN, expiry, CVV, name) from a one-time Xfers iframe URL. URL expires after single use.',
+    'Opens the one-time Xfers iframe URL in a real browser and scrapes the virtual card details (PAN, expiry, CVV, cardholder name). The URL expires after one use. NOTE: You can skip this step by passing iframe_url directly to buy_on_shopee or buy_on_tokopedia — they scrape the card internally so card details never appear in chat. Only use this tool if you need to inspect card details before checkout.',
     { url: z.string().url().describe('One-time Xfers iframe URL from view_virtual_card') },
     async ({ url }) => {
       try {

@@ -4,27 +4,35 @@ import { sessions } from '../lib/session.js';
 import { browser } from '../lib/browser.js';
 import { toolResult } from '../lib/types.js';
 import { runShopeeCheckout } from '../merchants/shopee.js';
+import { extractCard } from './extract-card.js';
 
 export function registerBuyOnShopeeTool(server: McpServer): void {
   server.tool(
     'buy_on_shopee',
-    'Automates the full Shopee checkout in a real browser: navigates to product, selects variant, adds to cart, fills card details, handles 3DS. Runs asynchronously — poll with get_session_status. If status is need_input, call submit_input. This is the ONLY way to buy on Shopee.',
+    'Automates the full Shopee checkout in a real browser: navigates to product, selects variant, adds to cart, fills card details, handles 3DS. Runs asynchronously — poll with get_session_status. If status is need_input, call submit_input. Preferred: pass iframe_url (from view_virtual_card) so card details are scraped internally and never appear in chat.',
     {
       url: z.string().url().describe('Shopee product URL'),
-      card_number: z.string().optional().describe('Card PAN (16 digits). Omit to pause at payment — provide later via submit_input with card_details.'),
+      iframe_url: z.string().url().optional().describe('One-time Xfers iframe URL from view_virtual_card. Preferred over card_number/expiry/cvv — card details are scraped internally and never appear in chat.'),
+      card_number: z.string().optional().describe('Card PAN (16 digits). Prefer iframe_url instead. Omit both to pause at payment.'),
       card_expiry: z.string().optional().describe('Card expiry MM/YY'),
       card_cvv: z.string().optional().describe('Card CVV (3 digits)'),
       card_name: z.string().optional().describe('Name on card'),
       variant: z.string().optional().describe('Variant to select (e.g. "Black, Size L"). Omit to be prompted if variants exist.'),
     },
-    async ({ url, card_number, card_expiry, card_cvv, card_name, variant }) => {
+    async ({ url, iframe_url, card_number, card_expiry, card_cvv, card_name, variant }) => {
       try {
         const session = sessions.create('navigating');
         const page = await browser.newPage();
 
-        const card = card_number && card_expiry && card_cvv && card_name
+        let card = card_number && card_expiry && card_cvv && card_name
           ? { number: card_number, expiry: card_expiry, cvv: card_cvv, name: card_name }
           : undefined;
+
+        if (!card && iframe_url) {
+          console.error('[beliin] Scraping card details from iframe URL');
+          const scraped = await extractCard(iframe_url);
+          card = { number: scraped.number, expiry: scraped.expiry, cvv: scraped.cvv, name: scraped.name };
+        }
 
         runShopeeCheckout(page, session.id, {
           url,
