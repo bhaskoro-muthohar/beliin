@@ -255,8 +255,65 @@ export async function runTokopediaCheckout(
     // Step 8: CVV entry on separate page (D-02)
     sessions.update(sessionId, { state: 'cvv_entry' });
     await page.waitForURL('**/payment/validate/**', { timeout: 15000 });
-    await page.locator('input[type="password"], input[type="tel"], input[type="text"]').first().fill(card.cvv);
-    await page.locator('button:has-text("Lanjutkan"), button:has-text("Pay")').first().click();
+    await page.waitForTimeout(2000);
+
+    await page.screenshot({ path: `${DEBUG_DIR}/06-cvv-page.png`, fullPage: true });
+    console.error(`[beliin] CVV page URL: ${page.url()}`);
+    const inputCount = await page.locator('input').count();
+    const iframeCount2 = await page.locator('iframe').count();
+    console.error(`[beliin] CVV page inputs found: ${inputCount}, iframes: ${iframeCount2}`);
+
+    const cvvSelectors = [
+      'input[name="cvv"]',
+      'input[placeholder*="CVV" i]',
+      'input[placeholder*="CVC" i]',
+      'input[autocomplete="cc-csc"]',
+      'input[type="password"]',
+      'input[type="tel"]',
+      'input[type="text"]',
+    ];
+
+    let cvvFilled = false;
+
+    // Try direct page inputs first
+    for (const sel of cvvSelectors) {
+      const loc = page.locator(sel).first();
+      if (await loc.isVisible({ timeout: 1000 }).catch(() => false)) {
+        await loc.fill(card.cvv);
+        cvvFilled = true;
+        console.error(`[beliin] CVV filled via: ${sel}`);
+        break;
+      }
+    }
+
+    // Fallback: check if CVV input is inside an iframe
+    if (!cvvFilled && iframeCount2 > 0) {
+      const frames = page.frames();
+      for (const frame of frames) {
+        if (frame === page.mainFrame()) continue;
+        for (const sel of cvvSelectors) {
+          const loc = frame.locator(sel).first();
+          if (await loc.isVisible({ timeout: 1000 }).catch(() => false)) {
+            await loc.fill(card.cvv);
+            cvvFilled = true;
+            console.error(`[beliin] CVV filled via iframe: ${sel}`);
+            break;
+          }
+        }
+        if (cvvFilled) break;
+      }
+    }
+
+    if (!cvvFilled) {
+      await page.screenshot({ path: `${DEBUG_DIR}/06-cvv-failed.png`, fullPage: true });
+      sessions.update(sessionId, {
+        state: 'failed',
+        data: { error: `CVV input not found on payment/validate page. Inputs on page: ${inputCount}, iframes: ${iframeCount2}` },
+      });
+      return;
+    }
+
+    await page.locator('button:has-text("Lanjutkan"), button:has-text("Pay"), button[type="submit"]').first().click();
 
     // Step 9: 3DS handling (TOKO-05/06)
     sessions.update(sessionId, { state: 'awaiting_payment' });
