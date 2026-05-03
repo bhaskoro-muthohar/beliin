@@ -252,6 +252,22 @@ export async function runTokopediaCheckout(
 
     await page.waitForTimeout(500);
     await cardFrame.locator("button:has-text('Konfirmasi')").click();
+    console.error(`[beliin] Session ${sessionId}: clicked Konfirmasi, waiting for card processing...`);
+
+    await paymentFrame.locator('#iframe-creditcard').waitFor({ state: 'hidden', timeout: 15000 }).catch(() => {});
+    await page.waitForTimeout(3000);
+    await page.screenshot({ path: `${DEBUG_DIR}/05-after-konfirmasi.png`, fullPage: true });
+    console.error(`[beliin] After Konfirmasi: url=${page.url()}`);
+
+    const hasError = await page.locator('text=/kendala|kesalahan|error|gagal/i').first().isVisible({ timeout: 2000 }).catch(() => false);
+    if (hasError) {
+      await page.screenshot({ path: `${DEBUG_DIR}/05-error.png`, fullPage: true });
+      sessions.update(sessionId, {
+        state: 'failed',
+        data: { error: 'Tokopedia rejected the card after Konfirmasi. The card may be invalid or the payment gateway timed out.' },
+      });
+      return;
+    }
 
     // Step 7: Handle installment modal and place order
     sessions.update(sessionId, { state: 'placing_order' });
