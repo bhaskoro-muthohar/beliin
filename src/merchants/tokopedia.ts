@@ -237,9 +237,17 @@ export async function runTokopediaCheckout(
     }
 
     // Step 6: Fill card form in double-nested iframe (D-01)
+    // Use pressSequentially instead of fill — PCI forms need real keyboard events
     sessions.update(sessionId, { state: 'filling_card' });
-    await cardFrame.locator('div#cc-card-no input[data-n-input]').fill(card.number);
-    await cardFrame.locator('div#cc-exp-date input[data-n-input]').fill(card.expiry);
+    const cardNumberInput = cardFrame.locator('div#cc-card-no input[data-n-input]');
+    await cardNumberInput.click();
+    await cardNumberInput.pressSequentially(card.number, { delay: 50 });
+
+    const cardExpiryInput = cardFrame.locator('div#cc-exp-date input[data-n-input]');
+    await cardExpiryInput.click();
+    await cardExpiryInput.pressSequentially(card.expiry, { delay: 50 });
+
+    await page.waitForTimeout(500);
     await cardFrame.locator("button:has-text('Konfirmasi')").click();
 
     // Step 7: Handle installment modal and place order
@@ -279,7 +287,8 @@ export async function runTokopediaCheckout(
     for (const sel of cvvSelectors) {
       const loc = page.locator(sel).first();
       if (await loc.isVisible({ timeout: 1000 }).catch(() => false)) {
-        await loc.fill(card.cvv);
+        await loc.click();
+        await loc.pressSequentially(card.cvv, { delay: 50 });
         cvvFilled = true;
         console.error(`[beliin] CVV filled via: ${sel}`);
         break;
