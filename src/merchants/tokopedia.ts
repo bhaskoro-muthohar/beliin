@@ -277,12 +277,21 @@ export async function runTokopediaCheckout(
       await bayarPenuh.click();
     }
 
-    await page.locator('[data-testid="btnSafChoosePayment"], button:has-text("Bayar Sekarang")').first().click();
+    await page.waitForTimeout(2000);
+    await page.locator('.css-16vaz7h, [class*="overlay"], [class*="loading"]').first()
+      .waitFor({ state: 'hidden', timeout: 10000 }).catch(() => {});
 
-    // Screenshot + log immediately after clicking pay
-    await page.waitForTimeout(3000);
-    await page.screenshot({ path: `${DEBUG_DIR}/06-after-bayar.png`, fullPage: true });
-    console.error(`[beliin] After Bayar Sekarang: url=${page.url()}`);
+    const bayarBtn = page.locator('[data-testid="btnSafChoosePayment"], button:has-text("Bayar Sekarang")').first();
+    await bayarBtn.scrollIntoViewIfNeeded();
+    await bayarBtn.waitFor({ state: 'visible', timeout: 10000 });
+    await page.waitForTimeout(1000);
+
+    await page.screenshot({ path: `${DEBUG_DIR}/05b-before-bayar.png`, fullPage: true });
+    console.error(`[beliin] About to click Bayar Sekarang, url=${page.url()}`);
+    await bayarBtn.click();
+    await page.waitForTimeout(2000);
+    await page.screenshot({ path: `${DEBUG_DIR}/05c-after-bayar.png`, fullPage: true });
+    console.error(`[beliin] After Bayar Sekarang, url=${page.url()}`);
 
     // Step 8: Wait for any navigation away from checkout — CVV page, 3DS, or success
     sessions.update(sessionId, { state: 'cvv_entry' });
