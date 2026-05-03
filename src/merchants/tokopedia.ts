@@ -374,18 +374,22 @@ export async function runTokopediaCheckout(
 
       await page.screenshot({ path: `${DEBUG_DIR}/09-cvv-filled.png`, fullPage: true });
 
-      await page.waitForFunction(() => {
-        const buttons = document.querySelectorAll('button:not([disabled])');
-        return Array.from(buttons).some(btn => {
-          const text = btn.textContent || '';
-          return /Lanjutkan|Pay|Bayar|Konfirmasi/i.test(text);
-        });
-      }, { timeout: 10000 }).catch(() => {
-        console.error('[beliin] Submit button did not become enabled within 10s — clicking anyway');
-      });
+      await page.waitForTimeout(1000);
+      const submitBtn = page.locator('button:has-text("Lanjutkan"), button:has-text("Pay"), button:has-text("Bayar"), button:has-text("Konfirmasi"), button[type="submit"]').first();
+      await submitBtn.scrollIntoViewIfNeeded();
+      await submitBtn.waitFor({ state: 'visible', timeout: 10000 });
 
-      await page.waitForTimeout(500);
-      await page.locator('button:has-text("Lanjutkan"), button:has-text("Pay"), button:has-text("Bayar"), button:has-text("Konfirmasi"), button[type="submit"]').first().click();
+      await page.waitForTimeout(1000);
+      const isEnabled = await submitBtn.isEnabled();
+      console.error(`[beliin] Lanjutkan button visible, enabled=${isEnabled}`);
+      await page.screenshot({ path: `${DEBUG_DIR}/10-before-lanjutkan.png`, fullPage: true });
+
+      if (!isEnabled) {
+        console.error(`[beliin] Button disabled — retrying CVV fill`);
+      }
+
+      await submitBtn.click();
+      console.error(`[beliin] Clicked Lanjutkan/submit on CVV page`);
 
       // Wait for next navigation after CVV submit
       await page.waitForURL(
