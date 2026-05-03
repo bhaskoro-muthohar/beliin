@@ -87,17 +87,19 @@ export async function runTokopediaCheckout(
       );
     }
 
-    // Step 2: Handle variants
+    // Step 2: Handle variants — wait for SPA to render variant buttons
     sessions.update(sessionId, { state: 'selecting_variant' });
+    await page.waitForTimeout(3000);
     console.error(`[beliin] Session ${sessionId}: on PDP — ${page.url()}`);
     await selectVariantIfNeeded(page, sessionId, options.variant);
 
     // Step 3: Click Buy Now (prefer direct buy; fall back to cart flow)
     sessions.update(sessionId, { state: 'adding_to_cart' });
-    const buyNow = page.locator('button:has-text("Beli Langsung")');
-    if (await buyNow.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await buyNow.click();
-      console.error(`[beliin] Session ${sessionId}: clicked Beli Langsung`);
+    await page.waitForTimeout(2000);
+    const buyNow = page.locator('button:has-text("Beli Langsung"), button:has-text("Beli Sekarang"), button[data-testid="pdpBuyNowButton"]');
+    if (await buyNow.first().isVisible({ timeout: 3000 }).catch(() => false)) {
+      await buyNow.first().click();
+      console.error(`[beliin] Session ${sessionId}: clicked buy now button`);
 
       const navigated = await Promise.race([
         page.waitForURL('**/checkout**', { timeout: 15000 }).then(() => true),
@@ -107,14 +109,29 @@ export async function runTokopediaCheckout(
       if (!navigated && !page.url().includes('/checkout')) {
         console.error(`[beliin] Session ${sessionId}: still on PDP after buy click — likely missing variant`);
         await selectVariantIfNeeded(page, sessionId, undefined, true);
-        await buyNow.click();
-        console.error(`[beliin] Session ${sessionId}: retrying Beli Langsung after variant selection`);
+        await buyNow.first().click();
+        console.error(`[beliin] Session ${sessionId}: retrying buy now after variant selection`);
         await page.waitForURL('**/checkout**', { timeout: 15000 });
       }
     } else {
-      console.error(`[beliin] Session ${sessionId}: Beli Langsung not visible, using cart flow`);
-      await page.locator('button:has-text("+ Keranjang")').first().click();
+      console.error(`[beliin] Session ${sessionId}: buy now not visible, using cart flow`);
+      const addToCart = page.locator('button:has-text("+ Keranjang"), button:has-text("Keranjang"), button[data-testid="pdpAddToCartButton"]');
+      await addToCart.first().click();
+
+      const toastVisible = await page.locator('text=/berhasil|ditambahkan|keranjang/i').first()
+        .isVisible({ timeout: 5000 }).catch(() => false);
+
+      if (!toastVisible) {
+        sessions.update(sessionId, {
+          state: 'failed',
+          data: { error: 'Could not add item to cart — variant may not be selected or product is unavailable' },
+        });
+        return;
+      }
+
+      console.error(`[beliin] Session ${sessionId}: item added to cart, navigating to cart`);
       await page.goto('https://www.tokopedia.com/cart', { waitUntil: 'domcontentloaded' });
+      await page.waitForTimeout(2000);
       await page.locator('button:has-text("Beli")').first().click();
       await page.waitForURL('**/checkout**', { timeout: 15000 });
     }
