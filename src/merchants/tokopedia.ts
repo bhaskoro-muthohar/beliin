@@ -333,41 +333,70 @@ export async function runTokopediaCheckout(
       console.error(`[beliin] CVV filled, clicking Lanjutkan`);
       await cvvSubmitBtn.click();
 
-      await page.waitForURL(
-        (url) => {
-          const href = url.href;
-          return href.includes('3dsecure') || href.includes('acs') ||
-                 href.includes('tokopedia.com/payment') || href.includes('pembayaran') ||
-                 !href.includes('pay.tokopedia.id');
-        },
-        { timeout: 30000 },
-      );
+      await page.waitForTimeout(5000);
+      await page.screenshot({ path: `${DEBUG_DIR}/08-after-cvv-submit.png`, fullPage: true });
+      console.error(`[beliin] After CVV submit: url=${page.url()}`);
+      console.error(`[beliin] Page title: ${await page.title()}`);
+      for (const frame of page.frames()) {
+        console.error(`[beliin] Frame: ${frame.url()}`);
+      }
     } else {
       console.error(`[beliin] No CVV iframe found — may have skipped CVV page`);
     }
 
-    // Step 9: 3DS handling (TOKO-05/06)
+    // Step 9: Poll for post-CVV outcome — success, 3DS OTP, auto-approved 3DS, error
     sessions.update(sessionId, { state: 'awaiting_payment' });
-    console.error(`[beliin] Pre-3DS check URL: ${page.url()}`);
 
-    const is3DS = page.url().includes('3dsecure') || page.url().includes('acs');
-    if (is3DS) {
-      const otp = await waitForInput(sessionId, 'otp', 'Enter the 3DS OTP sent to your phone');
-      await page.fill('input[type="text"], input[type="password"]', otp);
-      await page.locator('button:has-text("OK"), button[type="submit"]').first().click();
-      await page.waitForURL('**tokopedia.com/**', { timeout: 30000 });
+    for (let i = 0; i < 6; i++) {
+      await page.waitForTimeout(5000);
+      const currentUrl = page.url();
+      console.error(`[beliin] Post-CVV check ${i + 1}: url=${currentUrl}`);
+      await page.screenshot({ path: `${DEBUG_DIR}/08-post-cvv-${i}.png`, fullPage: true });
+
+      const success = await page.locator('text=/pembayaran berhasil|payment successful|berhasil/i').first()
+        .isVisible({ timeout: 2000 }).catch(() => false);
+      if (success) {
+        sessions.update(sessionId, { state: 'success', data: { completed_at: Date.now() } });
+        console.error(`[beliin] Session ${sessionId}: checkout success`);
+        return;
+      }
+
+      const is3DS = currentUrl.includes('3dsecure') || currentUrl.includes('acs');
+      if (is3DS) {
+        const otp = await waitForInput(sessionId, 'otp', 'Enter the 3DS OTP sent to your phone');
+        await page.fill('input[type="text"], input[type="password"]', otp);
+        await page.locator('button:has-text("OK"), button[type="submit"]').first().click();
+        break;
+      }
+
+      const hasError = await page.locator('text=/gagal|ditolak|declined|error/i').first()
+        .isVisible({ timeout: 2000 }).catch(() => false);
+      if (hasError) {
+        await page.screenshot({ path: `${DEBUG_DIR}/09-payment-error.png`, fullPage: true });
+        sessions.update(sessionId, {
+          state: 'failed',
+          data: { error: 'Payment was declined or failed after CVV submission. URL: ' + currentUrl },
+        });
+        return;
+      }
+
+      if (currentUrl.includes('tokopedia.com') && !currentUrl.includes('pay.tokopedia')) {
+        break;
+      }
     }
 
     // Step 10: Verify payment result (TOKO-07)
     sessions.update(sessionId, { state: 'verifying' });
-    const success = await page.locator('text=pembayaran berhasil').first().isVisible({ timeout: 15000 }).catch(() => false);
+    const finalSuccess = await page.locator('text=/pembayaran berhasil|payment successful|berhasil/i').first()
+      .isVisible({ timeout: 15000 }).catch(() => false);
 
-    if (success) {
+    if (finalSuccess) {
       sessions.update(sessionId, { state: 'success', data: { completed_at: Date.now() } });
       console.error(`[beliin] Session ${sessionId}: checkout success`);
     } else {
-      sessions.update(sessionId, { state: 'failed', data: { error: 'Payment result not detected' } });
-      console.error(`[beliin] Session ${sessionId}: payment result not detected`);
+      await page.screenshot({ path: `${DEBUG_DIR}/10-final-state.png`, fullPage: true });
+      sessions.update(sessionId, { state: 'failed', data: { error: 'Payment result not detected. URL: ' + page.url() } });
+      console.error(`[beliin] Session ${sessionId}: payment result not detected at ${page.url()}`);
     }
   } catch (err) {
     sessions.update(sessionId, { state: 'failed', data: { error: (err as Error).message } });
