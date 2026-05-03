@@ -313,7 +313,20 @@ export async function runTokopediaCheckout(
       return;
     }
 
-    await page.locator('button:has-text("Lanjutkan"), button:has-text("Pay"), button[type="submit"]').first().click();
+    await page.screenshot({ path: `${DEBUG_DIR}/07-cvv-filled.png`, fullPage: true });
+
+    await page.waitForFunction(() => {
+      const buttons = document.querySelectorAll('button:not([disabled])');
+      return Array.from(buttons).some(btn => {
+        const text = btn.textContent || '';
+        return /Lanjutkan|Pay|Bayar|Konfirmasi/i.test(text);
+      });
+    }, { timeout: 10000 }).catch(() => {
+      console.error('[beliin] Submit button did not become enabled within 10s — clicking anyway');
+    });
+
+    await page.waitForTimeout(500);
+    await page.locator('button:has-text("Lanjutkan"), button:has-text("Pay"), button:has-text("Bayar"), button:has-text("Konfirmasi"), button[type="submit"]').first().click();
 
     // Step 9: 3DS handling (TOKO-05/06)
     sessions.update(sessionId, { state: 'awaiting_payment' });
