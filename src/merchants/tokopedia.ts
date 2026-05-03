@@ -284,12 +284,28 @@ export async function runTokopediaCheckout(
     const bayarBtn = page.locator('[data-testid="btnSafChoosePayment"], button:has-text("Bayar Sekarang")').first();
     await bayarBtn.scrollIntoViewIfNeeded();
     await bayarBtn.waitFor({ state: 'visible', timeout: 10000 });
-    await page.waitForTimeout(1000);
 
     await page.screenshot({ path: `${DEBUG_DIR}/05b-before-bayar.png`, fullPage: true });
     console.error(`[beliin] About to click Bayar Sekarang, url=${page.url()}`);
-    await bayarBtn.click();
-    await page.waitForTimeout(2000);
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await page.waitForTimeout(2000);
+      await bayarBtn.evaluate((el: HTMLElement) => el.click());
+      console.error(`[beliin] Bayar Sekarang attempt ${attempt + 1} (JS click)`);
+
+      await page.waitForTimeout(3000);
+      const hasError = await page.locator('text=/kendala|kesalahan|gagal/i').first().isVisible({ timeout: 2000 }).catch(() => false);
+      if (!hasError && !page.url().includes('/checkout')) {
+        console.error(`[beliin] Bayar Sekarang succeeded on attempt ${attempt + 1}`);
+        break;
+      }
+      if (hasError && attempt < 2) {
+        console.error(`[beliin] Error after Bayar Sekarang, retrying...`);
+        await page.locator('button:has-text("OK"), button:has-text("Coba"), button:has-text("Tutup")').first().click().catch(() => {});
+        await page.waitForTimeout(2000);
+      }
+    }
+
     await page.screenshot({ path: `${DEBUG_DIR}/05c-after-bayar.png`, fullPage: true });
     console.error(`[beliin] After Bayar Sekarang, url=${page.url()}`);
 
