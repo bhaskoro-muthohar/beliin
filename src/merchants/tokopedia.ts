@@ -263,91 +263,120 @@ export async function runTokopediaCheckout(
 
     await page.locator('[data-testid="btnSafChoosePayment"], button:has-text("Bayar Sekarang")').first().click();
 
-    // Step 8: CVV entry on separate page (D-02)
+    // Screenshot + log immediately after clicking pay
+    await page.waitForTimeout(3000);
+    await page.screenshot({ path: `${DEBUG_DIR}/06-after-bayar.png`, fullPage: true });
+    console.error(`[beliin] After Bayar Sekarang: url=${page.url()}`);
+
+    // Step 8: Wait for any navigation away from checkout — CVV page, 3DS, or success
     sessions.update(sessionId, { state: 'cvv_entry' });
-    await page.waitForURL('**/payment/validate/**', { timeout: 15000 });
-    await page.waitForTimeout(2000);
+    await page.waitForURL(
+      (url) => {
+        const href = url.href;
+        return href.includes('payment/validate') ||
+               href.includes('3dsecure') ||
+               href.includes('acs') ||
+               href.includes('verify') ||
+               href.includes('otp') ||
+               href.includes('pembayaran') ||
+               !href.includes('/checkout');
+      },
+      { timeout: 30000 },
+    );
+    console.error(`[beliin] Post-payment URL: ${page.url()}`);
+    await page.screenshot({ path: `${DEBUG_DIR}/07-post-payment.png`, fullPage: true });
 
-    await page.screenshot({ path: `${DEBUG_DIR}/06-cvv-page.png`, fullPage: true });
-    console.error(`[beliin] CVV page URL: ${page.url()}`);
-    const inputCount = await page.locator('input').count();
-    const iframeCount2 = await page.locator('iframe').count();
-    console.error(`[beliin] CVV page inputs found: ${inputCount}, iframes: ${iframeCount2}`);
+    const postPayUrl = page.url();
 
-    const cvvSelectors = [
-      'input[name="cvv"]',
-      'input[placeholder*="CVV" i]',
-      'input[placeholder*="CVC" i]',
-      'input[autocomplete="cc-csc"]',
-      'input[type="password"]',
-      'input[type="tel"]',
-      'input[type="text"]',
-    ];
+    // Branch based on where we landed
+    if (postPayUrl.includes('payment/validate') || postPayUrl.includes('verify')) {
+      // CVV entry page
+      await page.waitForTimeout(2000);
 
-    let cvvFilled = false;
+      await page.screenshot({ path: `${DEBUG_DIR}/08-cvv-page.png`, fullPage: true });
+      const inputCount = await page.locator('input').count();
+      const iframeCount2 = await page.locator('iframe').count();
+      console.error(`[beliin] CVV page inputs: ${inputCount}, iframes: ${iframeCount2}`);
 
-    // Try direct page inputs first
-    for (const sel of cvvSelectors) {
-      const loc = page.locator(sel).first();
-      if (await loc.isVisible({ timeout: 1000 }).catch(() => false)) {
-        await loc.click();
-        await loc.pressSequentially(card.cvv, { delay: 50 });
-        cvvFilled = true;
-        console.error(`[beliin] CVV filled via: ${sel}`);
-        break;
-      }
-    }
+      const cvvSelectors = [
+        'input[name="cvv"]',
+        'input[placeholder*="CVV" i]',
+        'input[placeholder*="CVC" i]',
+        'input[autocomplete="cc-csc"]',
+        'input[type="password"]',
+        'input[type="tel"]',
+        'input[type="text"]',
+      ];
 
-    // Fallback: check if CVV input is inside an iframe
-    if (!cvvFilled && iframeCount2 > 0) {
-      const frames = page.frames();
-      for (const frame of frames) {
-        if (frame === page.mainFrame()) continue;
-        for (const sel of cvvSelectors) {
-          const loc = frame.locator(sel).first();
-          if (await loc.isVisible({ timeout: 1000 }).catch(() => false)) {
-            await loc.fill(card.cvv);
-            cvvFilled = true;
-            console.error(`[beliin] CVV filled via iframe: ${sel}`);
-            break;
-          }
+      let cvvFilled = false;
+
+      for (const sel of cvvSelectors) {
+        const loc = page.locator(sel).first();
+        if (await loc.isVisible({ timeout: 1000 }).catch(() => false)) {
+          await loc.click();
+          await loc.pressSequentially(card.cvv, { delay: 50 });
+          cvvFilled = true;
+          console.error(`[beliin] CVV filled via: ${sel}`);
+          break;
         }
-        if (cvvFilled) break;
       }
-    }
 
-    if (!cvvFilled) {
-      await page.screenshot({ path: `${DEBUG_DIR}/06-cvv-failed.png`, fullPage: true });
-      sessions.update(sessionId, {
-        state: 'failed',
-        data: { error: `CVV input not found on payment/validate page. Inputs on page: ${inputCount}, iframes: ${iframeCount2}` },
+      if (!cvvFilled && iframeCount2 > 0) {
+        const frames = page.frames();
+        for (const frame of frames) {
+          if (frame === page.mainFrame()) continue;
+          for (const sel of cvvSelectors) {
+            const loc = frame.locator(sel).first();
+            if (await loc.isVisible({ timeout: 1000 }).catch(() => false)) {
+              await loc.fill(card.cvv);
+              cvvFilled = true;
+              console.error(`[beliin] CVV filled via iframe: ${sel}`);
+              break;
+            }
+          }
+          if (cvvFilled) break;
+        }
+      }
+
+      if (!cvvFilled) {
+        await page.screenshot({ path: `${DEBUG_DIR}/08-cvv-failed.png`, fullPage: true });
+        sessions.update(sessionId, {
+          state: 'failed',
+          data: { error: `CVV input not found. Inputs: ${inputCount}, iframes: ${iframeCount2}` },
+        });
+        return;
+      }
+
+      await page.screenshot({ path: `${DEBUG_DIR}/09-cvv-filled.png`, fullPage: true });
+
+      await page.waitForFunction(() => {
+        const buttons = document.querySelectorAll('button:not([disabled])');
+        return Array.from(buttons).some(btn => {
+          const text = btn.textContent || '';
+          return /Lanjutkan|Pay|Bayar|Konfirmasi/i.test(text);
+        });
+      }, { timeout: 10000 }).catch(() => {
+        console.error('[beliin] Submit button did not become enabled within 10s — clicking anyway');
       });
-      return;
+
+      await page.waitForTimeout(500);
+      await page.locator('button:has-text("Lanjutkan"), button:has-text("Pay"), button:has-text("Bayar"), button:has-text("Konfirmasi"), button[type="submit"]').first().click();
+
+      // Wait for next navigation after CVV submit
+      await page.waitForURL(
+        (url) => {
+          const href = url.href;
+          return href.includes('3dsecure') || href.includes('acs') ||
+                 href.includes('tokopedia.com/payment') || href.includes('pembayaran') ||
+                 (!href.includes('payment/validate') && !href.includes('verify'));
+        },
+        { timeout: 30000 },
+      );
     }
-
-    await page.screenshot({ path: `${DEBUG_DIR}/07-cvv-filled.png`, fullPage: true });
-
-    await page.waitForFunction(() => {
-      const buttons = document.querySelectorAll('button:not([disabled])');
-      return Array.from(buttons).some(btn => {
-        const text = btn.textContent || '';
-        return /Lanjutkan|Pay|Bayar|Konfirmasi/i.test(text);
-      });
-    }, { timeout: 10000 }).catch(() => {
-      console.error('[beliin] Submit button did not become enabled within 10s — clicking anyway');
-    });
-
-    await page.waitForTimeout(500);
-    await page.locator('button:has-text("Lanjutkan"), button:has-text("Pay"), button:has-text("Bayar"), button:has-text("Konfirmasi"), button[type="submit"]').first().click();
 
     // Step 9: 3DS handling (TOKO-05/06)
     sessions.update(sessionId, { state: 'awaiting_payment' });
-
-    // Wait for navigation after clicking pay — either 3DS redirect or success page
-    await page.waitForURL(
-      (url) => url.href.includes('3dsecure') || url.href.includes('acs') || url.href.includes('tokopedia.com/payment') || url.href.includes('pembayaran'),
-      { timeout: 30000 },
-    );
+    console.error(`[beliin] Pre-3DS check URL: ${page.url()}`);
 
     const is3DS = page.url().includes('3dsecure') || page.url().includes('acs');
     if (is3DS) {
