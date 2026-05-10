@@ -1,8 +1,5 @@
 import { Page } from 'playwright';
-import { mkdirSync } from 'fs';
 import { sessions } from '../lib/session.js';
-
-const DEBUG_DIR = '/tmp/beliin-debug';
 
 export interface TokopediaCheckoutOptions {
   url: string;
@@ -143,10 +140,6 @@ export async function runTokopediaCheckout(
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(2000);
 
-    mkdirSync(DEBUG_DIR, { recursive: true });
-    await page.screenshot({ path: `${DEBUG_DIR}/01-checkout.png`, fullPage: true });
-    console.error(`[beliin] DEBUG 01-checkout: url=${page.url()}`);
-
     // Resolve card details — pause BEFORE touching payment if not provided
     let card = options.card;
     if (!card) {
@@ -169,18 +162,12 @@ export async function runTokopediaCheckout(
     sessions.update(sessionId, { state: 'selecting_payment' });
     await page.locator('text=Lihat Semua').first().click();
 
-    const iframeCount = await page.locator("iframe[title='payment-gateway-list']").count();
-    console.error(`[beliin] DEBUG 02: url=${page.url()}, payment iframes found=${iframeCount}`);
-    await page.screenshot({ path: `${DEBUG_DIR}/02-after-lihat-semua.png`, fullPage: true });
-
     const paymentFrame = page.frameLocator("iframe[title='payment-gateway-list']");
     await paymentFrame.locator('body').first().waitFor({ timeout: 10000 });
 
     // Only click "Kartu Kredit" if the section isn't already expanded
     const pakaiKartuLain = paymentFrame.locator('button:has-text("Pakai Kartu Lain")');
-    const kartuKreditVisible = await paymentFrame.locator(':text-matches("Kartu Kredit", "i")').first().isVisible().catch(() => false);
     const alreadyExpanded = await pakaiKartuLain.isVisible({ timeout: 3000 }).catch(() => false);
-    console.error(`[beliin] DEBUG 03: kartuKreditVisible=${kartuKreditVisible}, pakaiKartuLainVisible=${alreadyExpanded}`);
 
     if (!alreadyExpanded) {
       await paymentFrame.locator(':text-matches("Kartu Kredit", "i")').first().click();
@@ -189,12 +176,10 @@ export async function runTokopediaCheckout(
     } else {
       console.error(`[beliin] Session ${sessionId}: Kartu Kredit section already expanded`);
     }
-    await page.screenshot({ path: `${DEBUG_DIR}/03-after-kartu-kredit.png`, fullPage: true });
 
     // Minimum transaction check (D-04)
     const cardUnavailable = await paymentFrame.locator('text=Tambah kartu tidak tersedia').isVisible({ timeout: 3000 }).catch(() => false);
     if (cardUnavailable) {
-      await page.screenshot({ path: `${DEBUG_DIR}/05-failure.png`, fullPage: true });
       sessions.update(sessionId, {
         state: 'failed',
         data: { error: 'Card payment unavailable — transaction below minimum (~Rp50,000). Use a higher-value product.' },
@@ -216,10 +201,6 @@ export async function runTokopediaCheckout(
     let iframeReady = await cardFrame.locator('div#cc-card-no').first()
       .waitFor({ state: 'visible', timeout: 15000 }).then(() => true).catch(() => false);
 
-    const creditcardIframeExists = await paymentFrame.locator('#iframe-creditcard').count();
-    console.error(`[beliin] DEBUG 04: iframeReady=${iframeReady}, #iframe-creditcard count=${creditcardIframeExists}`);
-    await page.screenshot({ path: `${DEBUG_DIR}/04-after-pakai-kartu-lain.png`, fullPage: true });
-
     if (!iframeReady) {
       console.error(`[beliin] Session ${sessionId}: card iframe not found — re-expanding Kartu Kredit`);
       await paymentFrame.locator(':text-matches("Kartu Kredit", "i")').first().click();
@@ -228,7 +209,6 @@ export async function runTokopediaCheckout(
       iframeReady = await cardFrame.locator('div#cc-card-no').first()
         .waitFor({ state: 'visible', timeout: 15000 }).then(() => true).catch(() => false);
       if (!iframeReady) {
-        await page.screenshot({ path: `${DEBUG_DIR}/05-failure.png`, fullPage: true });
         sessions.update(sessionId, {
           state: 'failed',
           data: { error: 'Card form iframe did not appear after multiple attempts.' },
@@ -256,12 +236,9 @@ export async function runTokopediaCheckout(
 
     await paymentFrame.locator('#iframe-creditcard').waitFor({ state: 'hidden', timeout: 15000 }).catch(() => {});
     await page.waitForTimeout(3000);
-    await page.screenshot({ path: `${DEBUG_DIR}/05-after-konfirmasi.png`, fullPage: true });
-    console.error(`[beliin] After Konfirmasi: url=${page.url()}`);
 
     const hasError = await page.locator('text=/kendala|kesalahan|error|gagal/i').first().isVisible({ timeout: 2000 }).catch(() => false);
     if (hasError) {
-      await page.screenshot({ path: `${DEBUG_DIR}/05-error.png`, fullPage: true });
       sessions.update(sessionId, {
         state: 'failed',
         data: { error: 'Tokopedia rejected the card after Konfirmasi. The card may be invalid or the payment gateway timed out.' },
@@ -285,9 +262,6 @@ export async function runTokopediaCheckout(
     await bayarBtn.scrollIntoViewIfNeeded();
     await bayarBtn.waitFor({ state: 'visible', timeout: 10000 });
 
-    await page.screenshot({ path: `${DEBUG_DIR}/05b-before-bayar.png`, fullPage: true });
-    console.error(`[beliin] About to click Bayar Sekarang, url=${page.url()}`);
-
     for (let attempt = 0; attempt < 3; attempt++) {
       await page.waitForTimeout(2000);
       await bayarBtn.evaluate((el: HTMLElement) => el.click());
@@ -306,9 +280,6 @@ export async function runTokopediaCheckout(
       }
     }
 
-    await page.screenshot({ path: `${DEBUG_DIR}/05c-after-bayar.png`, fullPage: true });
-    console.error(`[beliin] After Bayar Sekarang, url=${page.url()}`);
-
     // Step 8: CVV entry — inside iframe on pay.tokopedia.id
     sessions.update(sessionId, { state: 'cvv_entry' });
 
@@ -317,7 +288,6 @@ export async function runTokopediaCheckout(
       { timeout: 30000 },
     );
     await page.waitForTimeout(3000);
-    await page.screenshot({ path: `${DEBUG_DIR}/06-cvv-page.png`, fullPage: true });
     console.error(`[beliin] CVV page URL: ${page.url()}`);
 
     const cvvFrame = page.frames().find(f => f.url().includes('pay.tokopedia.id/v2/payment/cvv'));
@@ -329,17 +299,11 @@ export async function runTokopediaCheckout(
       const cvvSubmitBtn = cvvFrame.locator('button#btn-submit-cvv');
       await cvvSubmitBtn.waitFor({ state: 'visible', timeout: 5000 });
       await page.waitForTimeout(500);
-      await page.screenshot({ path: `${DEBUG_DIR}/07-cvv-filled.png`, fullPage: true });
       console.error(`[beliin] CVV filled, clicking Lanjutkan`);
       await cvvSubmitBtn.click();
 
       await page.waitForTimeout(5000);
-      await page.screenshot({ path: `${DEBUG_DIR}/08-after-cvv-submit.png`, fullPage: true });
       console.error(`[beliin] After CVV submit: url=${page.url()}`);
-      console.error(`[beliin] Page title: ${await page.title()}`);
-      for (const frame of page.frames()) {
-        console.error(`[beliin] Frame: ${frame.url()}`);
-      }
     } else {
       console.error(`[beliin] No CVV iframe found — may have skipped CVV page`);
     }
@@ -351,7 +315,6 @@ export async function runTokopediaCheckout(
       await page.waitForTimeout(5000);
       const currentUrl = page.url();
       console.error(`[beliin] Post-CVV check ${i + 1}: url=${currentUrl}`);
-      await page.screenshot({ path: `${DEBUG_DIR}/08-post-cvv-${i}.png`, fullPage: true });
 
       const success = await page.locator('text=/pembayaran berhasil|payment successful|berhasil/i').first()
         .isVisible({ timeout: 2000 }).catch(() => false);
@@ -372,7 +335,6 @@ export async function runTokopediaCheckout(
       const hasError = await page.locator('text=/gagal|ditolak|declined|error/i').first()
         .isVisible({ timeout: 2000 }).catch(() => false);
       if (hasError) {
-        await page.screenshot({ path: `${DEBUG_DIR}/09-payment-error.png`, fullPage: true });
         sessions.update(sessionId, {
           state: 'failed',
           data: { error: 'Payment was declined or failed after CVV submission. URL: ' + currentUrl },
@@ -394,7 +356,6 @@ export async function runTokopediaCheckout(
       sessions.update(sessionId, { state: 'success', data: { completed_at: Date.now() } });
       console.error(`[beliin] Session ${sessionId}: checkout success`);
     } else {
-      await page.screenshot({ path: `${DEBUG_DIR}/10-final-state.png`, fullPage: true });
       sessions.update(sessionId, { state: 'failed', data: { error: 'Payment result not detected. URL: ' + page.url() } });
       console.error(`[beliin] Session ${sessionId}: payment result not detected at ${page.url()}`);
     }

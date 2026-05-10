@@ -33,3 +33,7 @@ This project uses GSD for planning and execution.
 - `/gsd-plan-phase N` — create execution plans
 - `/gsd-execute-phase N` — execute plans
 - `/gsd-verify-work` — verify phase deliverables
+
+## Skills
+
+- `/beliin` — autonomous purchase agent (`.claude/skills/beliin/SKILL.md`)
