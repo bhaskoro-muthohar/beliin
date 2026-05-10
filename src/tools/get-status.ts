@@ -6,7 +6,7 @@ import { toolResult } from '../lib/types.js';
 export function registerGetStatusTool(server: McpServer): void {
   server.tool(
     'get_session_status',
-    'Get the current state of a checkout session',
+    'Poll the progress of an async checkout session started by buy_on_shopee or buy_on_tokopedia. Returns current state: navigating, on_checkout, need_input, processing, success, or failed. If need_input, call submit_input with the session_id.',
     { session_id: z.string().describe('The session ID to check') },
     async ({ session_id }) => {
       try {

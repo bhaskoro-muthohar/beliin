@@ -6,7 +6,7 @@ import { toolResult } from '../lib/types.js';
 export function registerSearchOnShopeeTool(server: McpServer): void {
   server.tool(
     'search_on_shopee',
-    'Search Shopee Indonesia for products by keyword. Returns top 10 results with name, price, and URL. Use the URL with buy_on_shopee to purchase.',
+    'Search Shopee Indonesia for products using a real browser. Returns top 10 results with name, price, and URL. Use the returned URL with buy_on_shopee to purchase. This is the ONLY way to search Shopee — do not attempt to browse shopee.co.id yourself.',
     {
       query: z.string().describe('Search query (e.g. "mechanical keyboard", "mouse pad")'),
     },
