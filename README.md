@@ -1,6 +1,6 @@
 # beliin
 
-*beliin* (Indonesian slang: "buy it for me") — an MCP server that automates e-commerce checkout on Tokopedia using Playwright, orchestrated by Claude Desktop. Given a product URL and a virtual Visa card from the x402 Card MCP, beliin drives the browser through search, product selection, payment form entry, and checkout — pausing only when human input is genuinely required (login, OTP).
+*beliin* (Indonesian slang: "buy it for me") — an MCP server that automates e-commerce checkout on Tokopedia using Playwright, orchestrated by Claude Desktop. Given a product URL and a virtual Visa card from the x402 Card MCP, beliin drives the browser through search, product selection, payment form entry, and checkout — completing the entire checkout flow autonomously — from search to payment confirmation.
 
 ## Architecture
 
