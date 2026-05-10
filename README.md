@@ -99,7 +99,7 @@ Replace `/path/to/beliin` with the actual path to your cloned repo.
 
 ## Demo
 
-[Demo Video](TODO)
+[Demo Video](https://www.youtube.com/watch?v=s24sHaPLWog)
 
 ## Claude Code Skill (Bonus Track)
 
